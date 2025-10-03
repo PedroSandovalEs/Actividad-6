@@ -1,0 +1,164 @@
+
+const loginModal = document.getElementById('loginModal');
+const loginForm = document.getElementById('loginForm');
+
+
+if (loginForm) {
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const password = document.getElementById('password').value;
+    const storedPassword = localStorage.getItem('pagePassword') || '1234';
+    if (password === storedPassword) {
+      loginModal.classList.remove('show');
+    } else {
+      alert('Contraseña incorrecta');
+    }
+  });
+} else {
+  console.warn('loginForm no encontrado en DOM');
+}
+
+
+window.addEventListener('load', () => {
+  if (loginModal) loginModal.classList.add('show');
+  const comentariosGuardados = JSON.parse(localStorage.getItem('comentarios')) || [];
+  comentariosGuardados.forEach(c => mostrarComentario(c));
+});
+
+// cambiar contraseña
+document.getElementById('setPasswordButton')?.addEventListener('click', () => {
+  const nueva = prompt('Escribe la nueva contraseña:');
+  if (nueva && nueva.trim().length >= 4) {
+    localStorage.setItem('pagePassword', nueva);
+    alert('✅ Contraseña cambiada con éxito');
+  } else {
+    alert('La contraseña debe tener al menos 4 caracteres');
+  }
+});
+
+
+function agregarComentario() {
+  const nombre = document.getElementById('nombre').value.trim();
+  const mensaje = document.getElementById('mensaje').value.trim();
+  const imagenInput = document.getElementById('imagen');
+
+  if (nombre.length < 3) { alert('El nombre debe tener al menos 3 caracteres'); return; }
+  if (mensaje.length === 0) { alert('Escribe un mensaje'); return; }
+  if (mensaje.length > 200) { alert('El mensaje no puede exceder 200 caracteres'); return; }
+
+  const fechaTexto = new Date().toLocaleString();
+  let imagenData = null;
+
+  if (imagenInput && imagenInput.files && imagenInput.files[0]) {
+    const lector = new FileReader();
+    lector.onload = function(e) {
+      imagenData = e.target.result;
+      guardarYMostrar({ nombre, mensaje, fechaTexto, imagenData, likes: 0 });
+    }
+    lector.readAsDataURL(imagenInput.files[0]);
+  } else {
+    guardarYMostrar({ nombre, mensaje, fechaTexto, imagenData, likes: 0 });
+  }
+
+  document.getElementById('nombre').value = '';
+  document.getElementById('mensaje').value = '';
+  if (imagenInput) imagenInput.value = '';
+  const prev = document.getElementById('previewContainer');
+  if (prev) prev.style.display = 'none';
+}
+
+
+document.getElementById('imagen')?.addEventListener('change', function() {
+  const previewContainer = document.getElementById('previewContainer');
+  const previewImg = document.getElementById('previewImg');
+  if (this.files && this.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      if (previewImg) previewImg.src = e.target.result;
+      if (previewContainer) previewContainer.style.display = 'block';
+    }
+    reader.readAsDataURL(this.files[0]);
+  } else {
+    if (previewContainer) previewContainer.style.display = 'none';
+  }
+});
+
+function guardarYMostrar(comentario) {
+  const comentariosGuardados = JSON.parse(localStorage.getItem('comentarios')) || [];
+  comentariosGuardados.push(comentario);
+  localStorage.setItem('comentarios', JSON.stringify(comentariosGuardados));
+  mostrarComentario(comentario);
+}
+
+function mostrarComentario({ nombre, mensaje, fechaTexto, imagenData, likes }) {
+  const comentariosDiv = document.getElementById('comentarios');
+  const comentarioDiv = document.createElement('div');
+  comentarioDiv.classList.add('comment');
+
+  const content = document.createElement('div');
+  content.innerHTML = `
+    <strong>${escapeHtml(nombre)}</strong>
+    <p>${escapeHtml(mensaje)}</p>
+    <small>${fechaTexto}</small>
+  `;
+
+  if (imagenData) {
+    const img = document.createElement('img');
+    img.src = imagenData;
+    content.appendChild(img);
+  }
+
+  const likeButton = document.createElement('button');
+  likeButton.classList.add('like-button');
+  likeButton.textContent = `👍 ${likes || 0}`;
+  likeButton.addEventListener('click', () => {
+    const comentarios = JSON.parse(localStorage.getItem('comentarios')) || [];
+    const index = comentarios.findIndex(c => c.nombre === nombre && c.mensaje === mensaje && c.fechaTexto === fechaTexto);
+    if (index !== -1) {
+      comentarios[index].likes = (comentarios[index].likes || 0) + 1;
+      localStorage.setItem('comentarios', JSON.stringify(comentarios));
+      likeButton.textContent = `👍 ${comentarios[index].likes}`;
+    }
+  });
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.classList.add('btn-delete');
+  deleteBtn.textContent = '🗑️';
+  deleteBtn.addEventListener('click', () => {
+    if (confirm('¿Borrar este comentario?')) {
+      const comentarios = JSON.parse(localStorage.getItem('comentarios')) || [];
+      const nuevos = comentarios.filter(c => !(c.nombre === nombre && c.mensaje === mensaje && c.fechaTexto === fechaTexto));
+      localStorage.setItem('comentarios', JSON.stringify(nuevos));
+      comentarioDiv.remove();
+    }
+  });
+
+  comentarioDiv.appendChild(content);
+  comentarioDiv.appendChild(likeButton);
+  comentarioDiv.appendChild(deleteBtn);
+  comentariosDiv.appendChild(comentarioDiv);
+}
+
+function borrarComentarios() {
+  if (confirm('¿Borrar todos los comentarios?')) {
+    localStorage.removeItem('comentarios');
+    document.getElementById('comentarios').innerHTML = '<h3>Comentarios</h3>';
+  }
+}
+
+function guardarRepo() {
+  const repoURL = document.getElementById('repoURL').value.trim();
+  if (!repoURL) { alert('Escribe la URL de tu repositorio'); return; }
+  const blob = new Blob([repoURL], { type: 'text/plain' });
+  const enlace = document.createElement('a');
+  enlace.href = URL.createObjectURL(blob);
+  enlace.download = 'repositorio.txt';
+  enlace.click();
+}
+
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, s => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[s]));
+}
